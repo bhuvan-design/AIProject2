@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b1020">
+    <meta name="description" content="An intelligent campus navigation assistant powered by a database-backed campus graph and BFS search.">
+    <title>CampusFlow | Intelligent Campus Navigation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="CampusFlow home">
+            <span class="brand-mark"><i data-lucide="route"></i></span>
+            <span class="brand-name">campus<span>flow</span><small>SMART NAVIGATION</small></span>
+        </a>
+        <div class="topbar-right">
+            <span class="live-indicator"><span></span> SYSTEM ONLINE</span>
+            <div class="avatar" aria-label="Campus navigation">CF</div>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <section class="hero">
+            <div class="hero-copy">
+                <div class="eyebrow"><span class="eyebrow-line"></span> INTELLIGENT AGENT SYSTEMS <span class="eyebrow-tag">VTU · BCS515B</span></div>
+                <h1>Find your way.<br><span>Make every step count.</span></h1>
+                <p class="hero-description">Navigate your campus with intelligent route discovery, live path insights, and a map that makes every destination feel closer.</p>
+            </div>
+            <div class="hero-orbit" aria-hidden="true">
+                <div class="orbit orbit-outer"></div><div class="orbit orbit-inner"></div>
+                <div class="orbit-core"><i data-lucide="navigation"></i></div>
+                <span class="orbit-node node-a"></span><span class="orbit-node node-b"></span><span class="orbit-node node-c"></span>
+                <span class="orbit-label label-a">DISCOVER</span><span class="orbit-label label-b">CONNECT</span>
+            </div>
+        </section>
+
+        <section class="stats-row" aria-label="Campus system overview">
+            <article class="stat-card">
+                <span class="stat-icon purple"><i data-lucide="map-pin"></i></span>
+                <div><span class="stat-label">CAMPUS LOCATIONS</span><strong>{{ locations|length }}</strong><small>Places in the network</small></div>
+            </article>
+            <article class="stat-card">
+                <span class="stat-icon blue"><i data-lucide="git-branch"></i></span>
+                <div><span class="stat-label">CONNECTIONS</span><strong>{{ connection_count }}</strong><small>Walkable pathways</small></div>
+            </article>
+            <article class="stat-card">
+                <span class="stat-icon green"><i data-lucide="search-check"></i></span>
+                <div><span class="stat-label">SAVED SEARCHES</span><strong id="totalSearches">{{ total_searches }}</strong><small>Navigation requests stored</small></div>
+            </article>
+            <article class="stat-card">
+                <span class="stat-icon orange"><i data-lucide="check-circle-2"></i></span>
+                <div><span class="stat-label">ROUTES FOUND</span><strong>{{ successful_searches }}</strong><small>Successful route searches</small></div>
+            </article>
+        </section>
+
+        <section class="main-grid">
+            <div class="left-stack">
+                <article class="surface navigation-card">
+                    <div class="section-heading">
+                        <div><span class="section-kicker">LET'S GET YOU THERE</span><h2>Plan your route</h2></div>
+                        <span class="heading-icon"><i data-lucide="sliders-horizontal"></i></span>
+                    </div>
+                    <p class="section-subtitle">Choose where you're starting and where you want to go.</p>
+
+                    <form id="navigationForm">
+                        <label for="source">STARTING POINT</label>
+                        <div class="select-wrap"><i data-lucide="circle-dot"></i>
+                            <select id="source" name="source" required>
+                                {% for location in locations %}
+                                <option value="{{ location.code }}" {% if location.code == 'MG' %}selected{% endif %}>{{ location.name }} · {{ location.code }}</option>
+                                {% endfor %}
+                            </select><i data-lucide="chevron-down" class="select-chevron"></i>
+                        </div>
+                        <button class="swap-button" type="button" id="swapLocations" aria-label="Swap starting point and destination"><i data-lucide="arrow-down-up"></i></button>
+                        <label for="destination">DESTINATION</label>
+                        <div class="select-wrap destination-select"><i data-lucide="map-pin"></i>
+                            <select id="destination" name="destination" required>
+                                {% for location in locations %}
+                                <option value="{{ location.code }}" {% if location.code == 'BH' %}selected{% endif %}>{{ location.name }} · {{ location.code }}</option>
+                                {% endfor %}
+                            </select><i data-lucide="chevron-down" class="select-chevron"></i>
+                        </div>
+                        <button type="submit" class="primary-button" id="findRoute"><span><i data-lucide="route"></i> Find best route</span><i data-lucide="arrow-up-right"></i></button>
+                        <button type="button" class="secondary-button" id="resetRoute"><i data-lucide="rotate-ccw"></i> Reset route</button>
+                        <p class="form-message" id="formMessage" role="status">Ready when you are. Pick a destination to begin.</p>
+                    </form>
+                </article>
+
+                <article class="surface agent-card">
+                    <div class="section-heading">
+                        <div><span class="section-kicker">UNDER THE HOOD</span><h2>AI agent status</h2></div>
+                        <span class="status-pill" id="agentStatus"><span></span> IDLE</span>
+                    </div>
+                    <div class="agent-details">
+                        <div class="agent-detail"><span class="detail-icon"><i data-lucide="scan"></i></span><div><small>GOAL TEST</small><strong id="goalTest">Waiting for search</strong></div></div>
+                        <div class="agent-detail"><span class="detail-icon"><i data-lucide="layers-3"></i></span><div><small>SEARCH ALGORITHM</small><strong>Breadth-First Search</strong></div></div>
+                    </div>
+                    <div class="queue-panel">
+                        <div class="mini-panel-heading"><span>EXPLORED NODES</span><span id="exploredCount">0 locations</span></div>
+                        <div id="visitedNodes" class="node-chips"><span class="empty-chip">Your search will appear here</span></div>
+                    </div>
+                    <div class="algorithm-note"><i data-lucide="info"></i><span>BFS finds a route with the fewest connections. It does not guarantee the shortest distance in metres.</span></div>
+                </article>
+            </div>
+
+            <div class="right-stack">
+                <article class="surface map-card">
+                    <div class="section-heading map-heading">
+                        <div><span class="section-kicker">YOUR CAMPUS AT A GLANCE</span><h2>Interactive route map</h2></div>
+                        <span class="map-live"><span></span> LIVE GRAPH</span>
+                    </div>
+                    <div class="map-legend">
+                        <span><i class="legend-dot legend-start"></i> Start</span><span><i class="legend-dot legend-end"></i> Destination</span><span><i class="legend-dot legend-route"></i> Selected route</span>
+                    </div>
+                    <div class="map-stage">
+                        <svg id="campusGraph" viewBox="0 0 800 490" role="img" aria-label="Interactive map of connected campus locations"></svg>
+                        <div class="map-hint"><i data-lucide="mouse-pointer-2"></i> Select any node to set it as your destination</div>
+                    </div>
+                </article>
+
+                <article class="surface results-card">
+                    <div class="section-heading">
+                        <div><span class="section-kicker">ROUTE BREAKDOWN</span><h2>Your journey</h2></div>
+                        <span class="result-badge" id="routeLabel">AWAITING ROUTE</span>
+                    </div>
+                    <div class="metric-grid">
+                        <div class="metric"><span class="metric-symbol"><i data-lucide="footprints"></i></span><small>TOTAL DISTANCE</small><strong id="distanceMetric">-- <em>m</em></strong></div>
+                        <div class="metric"><span class="metric-symbol"><i data-lucide="clock-3"></i></span><small>WALKING TIME</small><strong id="timeMetric">-- <em>min</em></strong></div>
+                        <div class="metric"><span class="metric-symbol"><i data-lucide="milestone"></i></span><small>CONNECTIONS</small><strong id="hopsMetric">--</strong></div>
+                        <div class="metric"><span class="metric-symbol"><i data-lucide="scan-search"></i></span><small>NODES EXPLORED</small><strong id="nodesMetric">--</strong></div>
+                    </div>
+                    <div class="route-content">
+                        <div class="route-content-heading"><span>STEP-BY-STEP DIRECTIONS</span><span id="routeSummary">No route calculated yet</span></div>
+                        <div class="directions-list" id="directions"><div class="empty-directions"><span><i data-lucide="signpost"></i></span><strong>Your route will appear here</strong><p>Choose two locations and let CampusFlow find your way.</p></div></div>
+                    </div>
+                </article>
+
+                <article class="surface history-card">
+                    <div class="section-heading">
+                        <div><span class="section-kicker">PERSISTENT DATABASE</span><h2>Recent searches</h2></div>
+                        <button class="text-button" id="refreshHistory" type="button"><i data-lucide="refresh-cw"></i> Refresh</button>
+                    </div>
+                    <div class="history-list" id="historyList">
+                        {% for item in recent_history %}
+                        <div class="history-item">
+                            <span class="history-route-icon"><i data-lucide="route"></i></span>
+                            <div class="history-copy"><strong>{{ item.source }} <span>→</span> {{ item.destination }}</strong><small>{{ item.distance }} m · {{ item.hops }} connections</small></div>
+                            <span class="history-status {% if item.success %}success{% else %}failed{% endif %}">{% if item.success %}Saved{% else %}No route{% endif %}</span>
+                        </div>
+                        {% else %}
+                        <div class="history-empty">Your searches will be saved here automatically.</div>
+                        {% endfor %}
+                    </div>
+                    <p class="database-footnote"><i data-lucide="database"></i> Search history is stored in the connected database.</p>
+                </article>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <a class="footer-brand" href="/"><span class="brand-mark small"><i data-lucide="route"></i></span> campusflow</a>
+            <span>Built with Flask · SQLAlchemy · BFS</span>
+            <span>Academic mini project <b>•</b> VTU BCS515B</span>
+        </footer>
+    </main>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
